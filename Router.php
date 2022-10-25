@@ -1,11 +1,11 @@
 <?php
 
+namespace Core; 
+
 
 class Router {
 
     private $routes = array();
-
-    private $requestMethod = '';
 
     private $defaultMethod = 'main';
 
@@ -119,26 +119,28 @@ class Router {
 
             $routeExp = '/^'. str_replace('/', '\/', trim($route, '/')) . '$/i';
 
-            if (preg_match($routeExp, $basepath, $matches)) {
-                $routeIndex = $key;
-                $matches = array_slice($matches, 1);
-                
-                $params = array();
-                
-                foreach ($matches as $k => $paramData) {
-                    $params[$paramInfo[$k]['paramName']] = $paramData;
+            if (preg_match($routeExp, $basepath, $matches)) {        
+                if ($this->isRequestMethodValid($this->routes[$key]['requestMethod'])) {
+                    $routeIndex = $key;
+                    $matches = array_slice($matches, 1);
+                 
+                    $params = array();
+                    
+                    foreach ($matches as $k => $paramData) {
+                        $params[$paramInfo[$k]['paramName']] = $paramData;
+                    }
+                    
+                    $this->parameters = $params;
+                    
+                    break;
                 }
-                
-                $this->parameters = $params;
-                
-                break;
             }
             
             
         }
 
 
-        if ($routeIndex > -1 && $this->isRequestMethodValid($this->routes[$routeIndex]['requestMethod'])) {
+        if ($routeIndex > -1) {
             if (is_callable($this->routes[$routeIndex]['controler'])) {
                 // callback function
                 $callbackReturn = call_user_func_array(
@@ -154,7 +156,11 @@ class Router {
                 $controler = $this->routes[$routeIndex]['controler'];
                 $method = $this->routes[$routeIndex]['method'];
                 $controler = new $controler();
-                $controler->$method();
+                if ($this->getParams() === array()) {
+                    $controler->$method();
+                } else {
+                    $controler->$method($this->getParams());
+                }
             }
             
         } else {
@@ -168,6 +174,7 @@ class Router {
         return $this->parameters;
     }
 
+
     public function default($callback, $method = null) {
         if (is_callable($callback)) {
             $this->errCallback = $callback;
@@ -180,17 +187,26 @@ class Router {
         }
     }
 
+
     private function defaultHandle() {
+
         if (is_callable($this->errCallback)) {
-            $callbackReturn = call_user_func($this->errCallback);
+            $callbackReturn = call_user_func_array($this->errCallback, array(
+                array(
+                    'basepath' => $this->basepath(),
+                    'requestMethod' => $this->getRequestMethod()
+                )
+            ));
             if (is_string($callbackReturn)) {
                 echo $callbackReturn;
             }
         } elseif (is_string($this->errCallback)) {
             $callback = explode('::', $this->errCallback);
             $controler = new $callback[0];
-            $controler->$callback[1]();
+            $method = $callback[1];
+            $controler->$method();
         }
+        
     }
 
 
